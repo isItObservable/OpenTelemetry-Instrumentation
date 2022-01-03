@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
@@ -9,6 +11,11 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using cartservice.cartstore;
 using cartservice.services;
+using OpenTelemetry;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Context.Propagation;
+using Grpc.Core;
 
 namespace cartservice
 {
@@ -18,6 +25,8 @@ namespace cartservice
         {
             Configuration = configuration;
         }
+        const string OTLP_PORT="OTLP_PORT";
+        const string OTLP_HOST = "OTLP_HOST";
 
         public IConfiguration Configuration { get; }
         
@@ -25,6 +34,13 @@ namespace cartservice
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+
+            string otlpHost = Environment.GetEnvironmentVariable(OTLP_HOST);
+            int otlpPort = Int32.Parse(Environment.GetEnvironmentVariable(OTLP_PORT));
+            string serviceName = Environment.GetEnvironmentVariable("OTLP-SERVICENAME");
+             var activitySource = new ActivitySource(serviceName);
+            services.AddSingleton(activitySource);
+            OpenTelemetry.Sdk.SetDefaultTextMapPropagator(new B3Propagator());
             string redisAddress = Configuration["REDIS_ADDR"];
             ICartStore cartStore = null;
             if (!string.IsNullOrEmpty(redisAddress))
@@ -37,7 +53,22 @@ namespace cartservice
                 Console.WriteLine("If you wanted to use Redis Cache as a backup store, you should provide its address via command line or REDIS_ADDR environment variable.");
                 cartStore = new LocalCartStore();
             }
+             services.AddOpenTelemetryTracing((builder) => builder
+                            .AddSource(activitySource.Name)
+                            .AddAspNetCoreInstrumentation(opt =>
+                            {
+                                opt.EnableGrpcAspNetCoreSupport = true;
+                            })
+                            .AddHttpClientInstrumentation()
+                            .AddGrpcClientInstrumentation()
+                            .AddConsoleExporter()
+                            .AddRedisInstrumentation(cartStore.Connection)
+                            .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
+                            .AddOtlpExporter(opt => {
+                                opt.Endpoint = new System.Uri(otlpHost+otlpPort.ToString());
 
+
+                        }));
             // Initialize the redis store
             cartStore.InitializeAsync().GetAwaiter().GetResult();
             Console.WriteLine("Initialization completed");

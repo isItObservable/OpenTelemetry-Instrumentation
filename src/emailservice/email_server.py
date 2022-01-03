@@ -22,21 +22,19 @@ import time
 import grpc
 import traceback
 from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateError
-from google.api_core.exceptions import GoogleAPICallError
-from google.auth.exceptions import DefaultCredentialsError
 
 import demo_pb2
 import demo_pb2_grpc
 from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
-from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
-from opencensus.ext.grpc import server_interceptor
-from opencensus.common.transports.async_ import AsyncTransport
-from opencensus.trace import samplers
-
-# import googleclouddebugger
-import googlecloudprofiler
+from opentelemetry import trace
+from opentelemetry.instrumentation.grpc import server_interceptor
+from opentelemetry.instrumentation.grpc.grpcext import intercept_server
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
+from opentelemetry.sdk.trace.export import Span, SpanExporter, SimpleExportSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from logger import getJSONLogger
 logger = getJSONLogger('emailservice-server')
@@ -48,6 +46,25 @@ logger = getJSONLogger('emailservice-server')
 #     )
 # except:
 #     pass
+otlp_host = os.environ.get('OTLP_HOST')
+otlp_port = os.environ.get('OTLP_PORT')
+# create a CollectorSpanExporter
+collector_exporter = OTLPSpanExporter(
+     endpoint=otlp_host+":"+otlp_port,
+      insecure=True
+    # host_name="machine/container name",
+)
+resource = Resource(attributes={
+    "service.name": "EmailService"
+})
+# Create a BatchExportSpanProcessor and add the exporter to it
+# Create a BatchExportSpanProcessor and add the exporter to it
+span_processor = BatchExportSpanProcessor(collector_exporter)
+
+# Configure the tracer to use the collector exporter
+tracer_provider = TracerProvider(resource=resource))
+tracer_provider.add_span_processor(span_processor)
+tracer = TracerProvider().get_tracer(__name__)
 
 # Loads confirmation email template from file
 env = Environment(

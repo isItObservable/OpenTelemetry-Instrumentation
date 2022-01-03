@@ -29,8 +29,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-
-	pb "github.com/GoogleCloudPlatform/microservices-demo/src/frontend/genproto"
+    pb "github.com/GoogleCloudPlatform/microservices-demo/src/frontend/genproto"
 	"github.com/GoogleCloudPlatform/microservices-demo/src/frontend/money"
 )
 

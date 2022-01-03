@@ -24,10 +24,7 @@ import googleclouddebugger
 import googlecloudprofiler
 from google.auth.exceptions import DefaultCredentialsError
 import grpc
-from opencensus.ext.stackdriver import trace_exporter as stackdriver_exporter
-from opencensus.ext.grpc import server_interceptor
-from opencensus.trace import samplers
-from opencensus.common.transports.async_ import AsyncTransport
+
 
 import demo_pb2
 import demo_pb2_grpc
@@ -35,6 +32,35 @@ from grpc_health.v1 import health_pb2
 from grpc_health.v1 import health_pb2_grpc
 
 from logger import getJSONLogger
+from opentelemetry import trace
+from opentelemetry.instrumentation.grpc import server_interceptor
+from opentelemetry.instrumentation.grpc.grpcext import intercept_server
+from opentelemetry.instrumentation.grpc import client_interceptor
+from opentelemetry.instrumentation.grpc.grpcext import intercept_channel
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
+from opentelemetry.sdk.trace.export import Span, SpanExporter, SpanExportResult
+
+otlp_host = os.environ.get('OTLP_HOST')
+otlp_port = os.environ.get('OTLP_PORT')
+# create a CollectorSpanExporter
+collector_exporter = OTLPSpanExporter(
+     endpoint=otlp_host+":"+otlp_port,
+      insecure=True
+    # host_name="machine/container name",
+)
+resource = Resource(attributes={
+    "service.name": "EmailService"
+})
+# Create a BatchExportSpanProcessor and add the exporter to it
+# Create a BatchExportSpanProcessor and add the exporter to it
+span_processor = BatchExportSpanProcessor(collector_exporter)
+
+# Configure the tracer to use the collector exporter
+tracer_provider = TracerProvider(resource=resource))
+tracer_provider.add_span_processor(span_processor)
+tracer = TracerProvider().get_tracer(__name__)
 logger = getJSONLogger('recommendationservice-server')
 
 def initStackdriverProfiling():

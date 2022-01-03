@@ -20,19 +20,23 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"cloud.google.com/go/profiler"
-	"contrib.go.opencensus.io/exporter/jaeger"
-	"contrib.go.opencensus.io/exporter/stackdriver"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"go.opencensus.io/plugin/ocgrpc"
-	"go.opencensus.io/plugin/ochttp"
-	"go.opencensus.io/plugin/ochttp/propagation/b3"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/trace"
+
+
 	"google.golang.org/grpc"
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+    "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+    "go.opentelemetry.io/otel/propagation"
+    "go.opentelemetry.io/otel/sdk/resource"
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+    sdktrace "go.opentelemetry.io/otel/sdk/trace"
+    semconv  "go.opentelemetry.io/otel/semconv/v1.7.0"
+
+
+    "go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
 const (
@@ -55,7 +59,23 @@ var (
 		"TRY": true}
 )
 
+var tracer = otel.Tracer("Frontend")
+
 type ctxKeySessionID struct{}
+var log *logrus.Logger
+func init() {
+	log = logrus.New()
+	log.Level = logrus.DebugLevel
+	log.Formatter = &logrus.JSONFormatter{
+		FieldMap: logrus.FieldMap{
+			logrus.FieldKeyTime:  "timestamp",
+			logrus.FieldKeyLevel: "severity",
+			logrus.FieldKeyMsg:   "message",
+		},
+		TimestampFormat: time.RFC3339Nano,
+	}
+	log.Out = os.Stdout
+}
 
 type frontendServer struct {
 	productCatalogSvcAddr string
@@ -79,34 +99,69 @@ type frontendServer struct {
 	adSvcAddr string
 	adSvcConn *grpc.ClientConn
 }
+// initTracer creates and registers trace provider instance.
+func  initProvider() {
+	ctx := context.Background()
+
+    	res, err := resource.New(ctx,
+    		resource.WithAttributes(
+    			// the service name used to display traces in backends
+    			semconv.ServiceNameKey.String("Frontend-service"),
+    		),
+    	)
+
+    	handleErr(err, "failed to create resource")
+
+    	// If the OpenTelemetry Collector is running on a local cluster (minikube or
+    	// microk8s), it should be accessible through the NodePort service at the
+    	// `localhost:30080` endpoint. Otherwise, replace `localhost` with the
+    	// endpoint of your cluster. If you run the app inside k8s, then you can
+    	// probably connect directly to the service through dns
+        svcAddr := os.Getenv("OTLP_SERVICE_ADDR")
+        if svcAddr == "" {
+            log.Info("OpenTelemetry initialization disabled.")
+            return
+        }
+        svcPort := os.Getenv("OTLP_SERVICE_PORT")
+                if svcPort == "" {
+                    log.Info("OpenTelemetry initialization disabled.")
+                    return
+                }
+
+        conn, err := grpc.DialContext(ctx, svcAddr+":"+svcPort, grpc.WithInsecure(), grpc.WithBlock())
+        	handleErr(err, "failed to create gRPC connection to collector")
+
+
+        otlpTraceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+        handleErr(err, "failed to create trace exporter")
+
+        batchSpanProcessor := sdktrace.NewBatchSpanProcessor(otlpTraceExporter)
+
+        tracerProvider := sdktrace.NewTracerProvider(
+            sdktrace.WithSampler(sdktrace.AlwaysSample()),
+            sdktrace.WithSpanProcessor(batchSpanProcessor),
+            sdktrace.WithResource(res),
+            //trace.WithSampler(sdktrace.AlwaysSample()), - please check TracerProvider.WithSampler() implementation for details.
+        )
+
+        otel.SetTracerProvider(tracerProvider)
+        otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+            propagation.TraceContext{}, propagation.Baggage{}))
+
+        // return func() {
+        //        		// Shutdown will flush any remaining spans and shut down the exporter.
+        //		handleErr(tracerProvider.Shutdown(ctx), "failed to shutdown TracerProvider")
+        //	}
+}
 
 func main() {
+
 	ctx := context.Background()
-	log := logrus.New()
-	log.Level = logrus.DebugLevel
-	log.Formatter = &logrus.JSONFormatter{
-		FieldMap: logrus.FieldMap{
-			logrus.FieldKeyTime:  "timestamp",
-			logrus.FieldKeyLevel: "severity",
-			logrus.FieldKeyMsg:   "message",
-		},
-		TimestampFormat: time.RFC3339Nano,
-	}
-	log.Out = os.Stdout
 
-	if os.Getenv("DISABLE_TRACING") == "" {
-		log.Info("Tracing enabled.")
-		go initTracing(log)
-	} else {
-		log.Info("Tracing disabled.")
-	}
 
-	if os.Getenv("DISABLE_PROFILER") == "" {
-		log.Info("Profiling enabled.")
-		go initProfiling(log, "frontend", "1.0.0")
-	} else {
-		log.Info("Profiling disabled.")
-	}
+    initProvider()
+
+
 
 	srvPort := port
 	if os.Getenv("PORT") != "" {
@@ -122,6 +177,8 @@ func main() {
 	mustMapEnv(&svc.shippingSvcAddr, "SHIPPING_SERVICE_ADDR")
 	mustMapEnv(&svc.adSvcAddr, "AD_SERVICE_ADDR")
 
+
+
 	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr)
 	mustConnGRPC(ctx, &svc.productCatalogSvcConn, svc.productCatalogSvcAddr)
 	mustConnGRPC(ctx, &svc.cartSvcConn, svc.cartSvcAddr)
@@ -131,6 +188,7 @@ func main() {
 	mustConnGRPC(ctx, &svc.adSvcConn, svc.adSvcAddr)
 
 	r := mux.NewRouter()
+	r.Use(otelmux.Middleware("Frontend"))
 	r.HandleFunc("/", svc.homeHandler).Methods(http.MethodGet, http.MethodHead)
 	r.HandleFunc("/product/{id}", svc.productHandler).Methods(http.MethodGet, http.MethodHead)
 	r.HandleFunc("/cart", svc.viewCartHandler).Methods(http.MethodGet, http.MethodHead)
@@ -144,114 +202,15 @@ func main() {
 	r.HandleFunc("/_healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "ok") })
 
 	var handler http.Handler = r
-	handler = &logHandler{log: log, next: handler} // add logging
-	handler = ensureSessionID(handler)             // add session ID
-	handler = &ochttp.Handler{                     // add opencensus instrumentation
-		Handler:     handler,
-		Propagation: &b3.HTTPFormat{}}
-
+    handler = &logHandler{log: log, next: handler} // add logging
+    handler = ensureSessionID(handler)             // add session ID
+    handler = otelhttp.NewHandler(handler, "hipstershop.Frontend/Recv.")
 	log.Infof("starting server on " + addr + ":" + srvPort)
 	log.Fatal(http.ListenAndServe(addr+":"+srvPort, handler))
 }
 
-func initJaegerTracing(log logrus.FieldLogger) {
 
-	svcAddr := os.Getenv("JAEGER_SERVICE_ADDR")
-	if svcAddr == "" {
-		log.Info("jaeger initialization disabled.")
-		return
-	}
 
-	// Register the Jaeger exporter to be able to retrieve
-	// the collected spans.
-	exporter, err := jaeger.NewExporter(jaeger.Options{
-		Endpoint: fmt.Sprintf("http://%s", svcAddr),
-		Process: jaeger.Process{
-			ServiceName: "frontend",
-		},
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	trace.RegisterExporter(exporter)
-	log.Info("jaeger initialization completed.")
-}
-
-func initStats(log logrus.FieldLogger, exporter *stackdriver.Exporter) {
-	view.SetReportingPeriod(60 * time.Second)
-	view.RegisterExporter(exporter)
-	if err := view.Register(ochttp.DefaultServerViews...); err != nil {
-		log.Warn("Error registering http default server views")
-	} else {
-		log.Info("Registered http default server views")
-	}
-	if err := view.Register(ocgrpc.DefaultClientViews...); err != nil {
-		log.Warn("Error registering grpc default client views")
-	} else {
-		log.Info("Registered grpc default client views")
-	}
-}
-
-func initStackdriverTracing(log logrus.FieldLogger) {
-	// TODO(ahmetb) this method is duplicated in other microservices using Go
-	// since they are not sharing packages.
-	for i := 1; i <= 3; i++ {
-		log = log.WithField("retry", i)
-		exporter, err := stackdriver.NewExporter(stackdriver.Options{})
-		if err != nil {
-			// log.Warnf is used since there are multiple backends (stackdriver & jaeger)
-			// to store the traces. In production setup most likely you would use only one backend.
-			// In that case you should use log.Fatalf.
-			log.Warnf("failed to initialize Stackdriver exporter: %+v", err)
-		} else {
-			trace.RegisterExporter(exporter)
-			log.Info("registered Stackdriver tracing")
-
-			// Register the views to collect server stats.
-			initStats(log, exporter)
-			return
-		}
-		d := time.Second * 20 * time.Duration(i)
-		log.Debugf("sleeping %v to retry initializing Stackdriver exporter", d)
-		time.Sleep(d)
-	}
-	log.Warn("could not initialize Stackdriver exporter after retrying, giving up")
-}
-
-func initTracing(log logrus.FieldLogger) {
-	// This is a demo app with low QPS. trace.AlwaysSample() is used here
-	// to make sure traces are available for observation and analysis.
-	// In a production environment or high QPS setup please use
-	// trace.ProbabilitySampler set at the desired probability.
-	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
-
-	initJaegerTracing(log)
-	initStackdriverTracing(log)
-
-}
-
-func initProfiling(log logrus.FieldLogger, service, version string) {
-	// TODO(ahmetb) this method is duplicated in other microservices using Go
-	// since they are not sharing packages.
-	for i := 1; i <= 3; i++ {
-		log = log.WithField("retry", i)
-		if err := profiler.Start(profiler.Config{
-			Service:        service,
-			ServiceVersion: version,
-			// ProjectID must be set if not running on GCP.
-			// ProjectID: "my-project",
-		}); err != nil {
-			log.Warnf("warn: failed to start profiler: %+v", err)
-		} else {
-			log.Info("started Stackdriver profiler")
-			return
-		}
-		d := time.Second * 10 * time.Duration(i)
-		log.Debugf("sleeping %v to retry initializing Stackdriver profiler", d)
-		time.Sleep(d)
-	}
-	log.Warn("warning: could not initialize Stackdriver profiler after retrying, giving up")
-}
 
 func mustMapEnv(target *string, envKey string) {
 	v := os.Getenv(envKey)
@@ -263,11 +222,19 @@ func mustMapEnv(target *string, envKey string) {
 
 func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr string) {
 	var err error
+
 	*conn, err = grpc.DialContext(ctx, addr,
 		grpc.WithInsecure(),
 		grpc.WithTimeout(time.Second*3),
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}))
+        grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
+        grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()))
 	if err != nil {
 		panic(errors.Wrapf(err, "grpc: failed to connect %s", addr))
+	}
+}
+
+func handleErr(err error, message string) {
+	if err != nil {
+		log.Fatalf("%s: %v", message, err)
 	}
 }

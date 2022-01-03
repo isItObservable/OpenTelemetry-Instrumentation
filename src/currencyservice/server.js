@@ -14,40 +14,11 @@
  * limitations under the License.
  */
 
-if(process.env.DISABLE_PROFILER) {
-  console.log("Profiler disabled.")
-}
-else {
-  console.log("Profiler enabled.")
-  require('@google-cloud/profiler').start({
-    serviceContext: {
-      service: 'currencyservice',
-      version: '1.0.0'
-    }
-  });
-}
 
 
-if(process.env.DISABLE_TRACING) {
-  console.log("Tracing disabled.")
-}
-else {
-  console.log("Tracing enabled.")
-  require('@google-cloud/trace-agent').start();
-}
 
-if(process.env.DISABLE_DEBUGGER) {
-  console.log("Debugger disabled.")
-}
-else {
-  console.log("Debugger enabled.")
-  require('@google-cloud/debug-agent').start({
-    serviceContext: {
-      service: 'currencyservice',
-      version: 'VERSION'
-    }
-  });
-}
+const tracer = require('./tracing')(process.env.OTLP_SERVICENAME);
+const api = require('@opentelemetry/api');
 
 const path = require('path');
 const grpc = require('grpc');
@@ -68,6 +39,9 @@ const logger = pino({
   changeLevelName: 'severity',
   useLevelLabels: true
 });
+
+
+
 
 /**
  * Helper function that loads a protobuf file.
@@ -91,7 +65,9 @@ function _loadProto (path) {
  * Uses public data from European Central Bank
  */
 function _getCurrencyData (callback) {
+  const span = tracer.startSpan("_getCurrencyData")
   const data = require('./data/currency_conversion.json');
+  span.end()
   callback(data);
 }
 
@@ -110,10 +86,16 @@ function _carry (amount) {
  * Lists the supported currencies
  */
 function getSupportedCurrencies (call, callback) {
-  logger.info('Getting supported currencies...');
-  _getCurrencyData((data) => {
-    callback(null, {currency_codes: Object.keys(data)});
-  });
+  const span = tracer.startSpan("getSupportedCurrencies")
+  span.setAttribute('vendor.error_id', '17343337');
+   try {
+        api.context.with(api.trace.setSpan(api.context.active(), span), () => _getCurrencyData((data) => {
+          callback(null, {currency_codes: Object.keys(data)});
+        }));
+      }
+      finally {
+        span.end();
+      }
 }
 
 /**
@@ -121,7 +103,10 @@ function getSupportedCurrencies (call, callback) {
  */
 function convert (call, callback) {
   logger.info('received conversion request');
+  const span = tracer.startSpan("convert");
   try {
+    api.context.with(api.trace.setSpan(api.context.active(), span), () => {
+    try {
     _getCurrencyData((data) => {
       const request = call.request;
 
@@ -131,7 +116,8 @@ function convert (call, callback) {
         units: from.units / data[from.currency_code],
         nanos: from.nanos / data[from.currency_code]
       });
-
+      span.setAttribute('currency_code.from', from.currency_code)
+      span.setAttribute('currency_code.to', request.to_code)
       euros.nanos = Math.round(euros.nanos);
 
       // Convert: EUR --> to_currency
@@ -145,12 +131,25 @@ function convert (call, callback) {
       result.currency_code = request.to_code;
 
       logger.info(`conversion request successful`);
+      span.addEvent('conversion request successful')
       callback(null, result);
     });
-  } catch (err) {
-    logger.error(`conversion request failed: ${err}`);
-    callback(err.message);
-  }
+  } catch (err)
+    {
+        logger.error(`conversion request failed: ${err}`);
+        span.setAttribute('error', true);
+        span.addEvent(`conversion request failed: ${err}`, {
+            'error.object': err,
+            message: err.message,
+            stack: err.stack
+          });
+        callback(err.message);
+    }
+                      });
+    }
+     finally {
+      span.end();
+    }
 }
 
 /**

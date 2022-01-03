@@ -11,23 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-FROM golang:1.15-alpine AS builder
-RUN apk add --no-cache ca-certificates git
-RUN apk add build-base
-
-WORKDIR /src
+FROM golang:1.16.12 as builder
+WORKDIR /build/src
 # restore dependencies
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
-
+ENV GOPROXY https://goproxy.cn
+RUN go mod tidy
+RUN go build -tags netgo -o /productcatalogservice .
 # Skaffold passes in debug-oriented compiler flags
 ARG SKAFFOLD_GO_GCFLAGS
 RUN go build -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /productcatalogservice .
 
 FROM alpine AS release
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates procps
+
 RUN GRPC_HEALTH_PROBE_VERSION=v0.3.6 && \
     wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
     chmod +x /bin/grpc_health_probe

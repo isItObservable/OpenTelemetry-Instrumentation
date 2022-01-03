@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+const opentelemetry = require('@opentelemetry/api');
 const cardValidator = require('simple-card-validator');
 const uuid = require('uuid/v4');
 const pino = require('pino');
@@ -56,6 +56,7 @@ class ExpiredCreditCard extends CreditCardError {
  * @return transaction_id - a random uuid v4.
  */
 module.exports = function charge (request) {
+  const span = opentelemetry.getSpan(opentelemetry.context.active());
   const { amount, credit_card: creditCard } = request;
   const cardNumber = creditCard.credit_card_number;
   const cardInfo = cardValidator(cardNumber);
@@ -64,8 +65,11 @@ module.exports = function charge (request) {
     valid
   } = cardInfo.getCardDetails();
 
-  if (!valid) { throw new InvalidCreditCard(); }
+  if (!valid) {
+    span.addEvent("invalid card")
+    throw new InvalidCreditCard(); }
 
+   span.setAttribute('card', cardType);
   // Only VISA and mastercard is accepted, other card types (AMEX, dinersclub) will
   // throw UnacceptedCreditCard error.
   if (!(cardType === 'visa' || cardType === 'mastercard')) { throw new UnacceptedCreditCard(cardType); }

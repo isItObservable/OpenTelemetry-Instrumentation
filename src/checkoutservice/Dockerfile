@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.15-alpine as builder
-RUN apk add --no-cache ca-certificates git
-RUN apk add build-base
-WORKDIR /src
+FROM golang:1.16.12 as builder
 
-# restore dependencies
-COPY go.mod go.sum ./
-RUN go mod download
+WORKDIR /build/src
 
 COPY . .
+ENV GOPROXY https://goproxy.cn
+RUN go mod tidy
+RUN go build -gcflags='-N -l' -tags netgo -o /checkoutservice .
+# restore dependencies
 
-# Skaffold passes in debug-oriented compiler flags
-ARG SKAFFOLD_GO_GCFLAGS
-RUN go build -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /checkoutservice .
+
+
+
+
 
 FROM alpine as release
 RUN apk add --no-cache ca-certificates

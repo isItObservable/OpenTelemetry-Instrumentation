@@ -18,20 +18,36 @@ import grpc
 
 import demo_pb2
 import demo_pb2_grpc
-
+from opentelemetry import trace
+from opentelemetry.instrumentation.grpc import server_interceptor
+from opentelemetry.instrumentation.grpc.grpcext import intercept_server
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
+from opentelemetry.sdk.trace.export import Span, SpanExporter, SimpleExportSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from logger import getJSONLogger
 logger = getJSONLogger('emailservice-client')
 
-from opencensus.trace.tracer import Tracer
-from opencensus.trace.exporters import stackdriver_exporter
-from opencensus.trace.ext.grpc import client_interceptor
+otlp_host = os.environ.get('OTLP_HOST')
+otlp_port = os.environ.get('OTLP_PORT')
+# create a CollectorSpanExporter
+collector_exporter = OTLPSpanExporter(
+     endpoint=otlp_host+":"+otlp_port,
+      insecure=True
+    # host_name="machine/container name",
+)
+resource = Resource(attributes={
+    "service.name": "EmailService"
+})
+# Create a BatchExportSpanProcessor and add the exporter to it
+# Create a BatchExportSpanProcessor and add the exporter to it
+span_processor = BatchExportSpanProcessor(collector_exporter)
 
-try:
-    exporter = stackdriver_exporter.StackdriverExporter()
-    tracer = Tracer(exporter=exporter)
-    tracer_interceptor = client_interceptor.OpenCensusClientInterceptor(tracer, host_port='0.0.0.0:8080')
-except:
-    tracer_interceptor = client_interceptor.OpenCensusClientInterceptor()
+# Configure the tracer to use the collector exporter
+tracer_provider = TracerProvider(resource=resource))
+tracer_provider.add_span_processor(span_processor)
+tracer = TracerProvider().get_tracer(__name__)
+
 
 def send_confirmation_email(email, order):
   channel = grpc.insecure_channel('0.0.0.0:8080')

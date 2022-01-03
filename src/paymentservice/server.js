@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+const opentelemetry = require('@opentelemetry/api');
 
 const path = require('path');
 const grpc = require('grpc');
@@ -40,20 +41,23 @@ class HipsterShopServer {
   }
 
   /**
-   * Handler for PaymentService.Charge.
-   * @param {*} call  { ChargeRequest }
-   * @param {*} callback  fn(err, ChargeResponse)
-   */
-  static ChargeServiceHandler (call, callback) {
-    try {
-      logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
-      const response = charge(call.request);
-      callback(null, response);
-    } catch (err) {
-      console.warn(err);
-      callback(err);
-    }
-  }
+    * Handler for PaymentService.Charge.
+    * @param {*} call  { ChargeRequest }
+    * @param {*} callback  fn(err, ChargeResponse)
+    */
+   static ChargeServiceHandler(call, callback) {
+     const span = opentelemetry.getSpan(opentelemetry.context.active());
+     opentelemetry.context.with(opentelemetry.setSpan(opentelemetry.ROOT_CONTEXT, span), () => {
+       try {
+         logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
+         const response = charge(call.request);
+         callback(null, response);
+       } catch (err) {
+         console.warn(err);
+         callback(err);
+       }
+     });
+   }
 
   static CheckHandler (call, callback) {
     callback(null, { status: 'SERVING' });
