@@ -107,6 +107,18 @@
                 "nanos": 990000000
             },
             "categories": ["kitchen"]
+        },
+        {
+            "id": "10E92MYYGH",
+            "name": "IsitObservable",
+            "description": "A nice swag of IsitObservable.",
+            "picture": "/static/img/products/path1160.png",
+            "priceUsd": {
+                "currencyCode": "USD",
+                "units": 8,
+                "nanos": 990000000
+            },
+            "categories": ["accessories"]
         }
     ]
 }
