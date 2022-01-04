@@ -1,0 +1,25 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel
+spec:
+  mode: daemonset
+  hostNetwork: true
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+    processors:
+    exporters:
+      logging:
+      otlphttp:
+        endpoint: "TENANTURL_TOREPLACE/api/v2/otlp"
+        headers: {"Authorization": "Api-Token DT_API_TOKEN_TO_REPLACE"}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: []
+          exporters: [logging,otlphttp]

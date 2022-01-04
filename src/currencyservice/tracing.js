@@ -1,12 +1,11 @@
 'use strict';
 
-const { NodeTracerProvider } = require('@opentelemetry/node');
-const { SimpleSpanProcessor } = require('@opentelemetry/tracing');
+const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
+const { SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-otlp-grpc');
 const opentelemetry = require('@opentelemetry/api');
-const { NodeTracerProvider } = require('@opentelemetry/node');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
-const { BasicTracerProvider, ConsoleSpanExporter, SimpleSpanProcessor } = require('@opentelemetry/sdk-trace-base');
+const { BasicTracerProvider, ConsoleSpanExporter } = require('@opentelemetry/sdk-trace-base');
 const { Resource } = require('@opentelemetry/resources');
 const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');

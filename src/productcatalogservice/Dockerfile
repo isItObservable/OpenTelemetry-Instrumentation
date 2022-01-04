@@ -17,13 +17,15 @@ WORKDIR /build/src
 COPY . .
 ENV GOPROXY https://goproxy.cn
 RUN go mod tidy
+RUN go mod download
 RUN go build -tags netgo -o /productcatalogservice .
 # Skaffold passes in debug-oriented compiler flags
 ARG SKAFFOLD_GO_GCFLAGS
 RUN go build -gcflags="${SKAFFOLD_GO_GCFLAGS}" -o /productcatalogservice .
 
-FROM alpine AS release
-RUN apk add --no-cache ca-certificates procps
+FROM ubuntu AS release
+RUN apt-get update
+RUN apt-get install wget -y
 
 RUN GRPC_HEALTH_PROBE_VERSION=v0.3.6 && \
     wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \

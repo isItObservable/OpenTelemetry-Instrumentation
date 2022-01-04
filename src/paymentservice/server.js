@@ -46,8 +46,7 @@ class HipsterShopServer {
     * @param {*} callback  fn(err, ChargeResponse)
     */
    static ChargeServiceHandler(call, callback) {
-     const span = opentelemetry.getSpan(opentelemetry.context.active());
-     opentelemetry.context.with(opentelemetry.setSpan(opentelemetry.ROOT_CONTEXT, span), () => {
+
        try {
          logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
          const response = charge(call.request);
@@ -56,7 +55,7 @@ class HipsterShopServer {
          console.warn(err);
          callback(err);
        }
-     });
+
    }
 
   static CheckHandler (call, callback) {

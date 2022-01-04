@@ -4,11 +4,12 @@ WORKDIR /build/src
 COPY . .
 ENV GOPROXY https://goproxy.cn
 RUN go mod tidy
+RUN go mod download
 RUN go build -tags netgo -o main
 
-FROM alpine as release
-RUN apk add --no-cache ca-certificates \
-    busybox-extras net-tools bind-tools procps
+FROM ubuntu as release
+RUN apt-get update
+RUN apt-get install wget -y
 WORKDIR /frontend
 COPY --from=builder /build/src/main /frontend/server
 COPY ./templates ./templates

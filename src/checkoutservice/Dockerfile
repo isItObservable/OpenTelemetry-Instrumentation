@@ -19,16 +19,13 @@ WORKDIR /build/src
 COPY . .
 ENV GOPROXY https://goproxy.cn
 RUN go mod tidy
+RUN go mod download
 RUN go build -gcflags='-N -l' -tags netgo -o /checkoutservice .
 # restore dependencies
 
-
-
-
-
-
-FROM alpine as release
-RUN apk add --no-cache ca-certificates
+FROM ubuntu as release
+RUN apt-get update
+RUN apt-get install wget -y
 RUN GRPC_HEALTH_PROBE_VERSION=v0.3.6 && \
     wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
     chmod +x /bin/grpc_health_probe

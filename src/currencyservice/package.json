@@ -24,6 +24,7 @@
     "@opentelemetry/exporter-otlp-grpc": "^0.26.0",
     "@opentelemetry/exporter-otlp-proto": "^0.26.0",
     "@opentelemetry/instrumentation": "^0.27.0",
+    "@opentelemetry/auto-instrumentations-node"  : "^0.27.0",
     "@opentelemetry/instrumentation-grpc": "^0.27.0",
     "@opentelemetry/resources": "^1.0.1",
     "@opentelemetry/semantic-conventions": "^1.0.1",

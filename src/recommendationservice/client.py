@@ -20,14 +20,11 @@ import demo_pb2
 import demo_pb2_grpc
 
 from opentelemetry import trace
-from opentelemetry.instrumentation.grpc import server_interceptor
-from opentelemetry.instrumentation.grpc.grpcext import intercept_server
 from opentelemetry.instrumentation.grpc import client_interceptor
-from opentelemetry.instrumentation.grpc.grpcext import intercept_channel
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import Span,TracerProvider
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
-from opentelemetry.sdk.trace.export import Span, SpanExporter, SpanExportResult
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import  SpanExporter, SpanExportResult
 
 
 
@@ -40,18 +37,17 @@ collector_exporter = OTLPSpanExporter(
       insecure=True
     # host_name="machine/container name",
 )
-resource = Resource(attributes={
-    "service.name": "EmailService"
-})
+resource=Resource.create({SERVICE_NAME: "recommandationserivce-server"})
+
 # Create a BatchExportSpanProcessor and add the exporter to it
 # Create a BatchExportSpanProcessor and add the exporter to it
-span_processor = BatchExportSpanProcessor(collector_exporter)
+span_processor = BatchSpanProcessor(collector_exporter)
 
 # Configure the tracer to use the collector exporter
-tracer_provider = TracerProvider(resource=resource))
+tracer_provider = TracerProvider(resource=resource)
 tracer_provider.add_span_processor(span_processor)
 tracer = TracerProvider().get_tracer(__name__)
-logger = getJSONLogger('recommendationservice-server')
+logger = getJSONLogger('recommendationservice-client')
 
 if __name__ == "__main__":
     # get port
@@ -60,16 +56,10 @@ if __name__ == "__main__":
     else:
         port = "8080"
 
-    try:
-        exporter = stackdriver_exporter.StackdriverExporter()
-        tracer = Tracer(exporter=exporter)
-        tracer_interceptor = client_interceptor.OpenCensusClientInterceptor(tracer, host_port='localhost:'+port)
-    except:
-        tracer_interceptor = client_interceptor.OpenCensusClientInterceptor()
 
     # set up server stub
     channel = grpc.insecure_channel('localhost:'+port)
-    channel = grpc.intercept_channel(channel, tracer_interceptor)
+    channel = grpc.intercept_channel(channel, client_interceptor())
     stub = demo_pb2_grpc.RecommendationServiceStub(channel)
     # form request
     request = demo_pb2.ListRecommendationsRequest(user_id="test", product_ids=["test"])

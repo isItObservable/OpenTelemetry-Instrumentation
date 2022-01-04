@@ -30,10 +30,10 @@ from grpc_health.v1 import health_pb2_grpc
 
 from opentelemetry import trace
 from opentelemetry.instrumentation.grpc import server_interceptor
-from opentelemetry.instrumentation.grpc.grpcext import intercept_server
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
-from opentelemetry.sdk.trace.export import Span, SpanExporter, SimpleExportSpanProcessor
+from opentelemetry.sdk.trace import TracerProvider,Span
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace.export import  SpanExporter, SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
 from logger import getJSONLogger
@@ -54,15 +54,13 @@ collector_exporter = OTLPSpanExporter(
       insecure=True
     # host_name="machine/container name",
 )
-resource = Resource(attributes={
-    "service.name": "EmailService"
-})
+resource=Resource.create({SERVICE_NAME: "emailservice-server"})
 # Create a BatchExportSpanProcessor and add the exporter to it
 # Create a BatchExportSpanProcessor and add the exporter to it
-span_processor = BatchExportSpanProcessor(collector_exporter)
+span_processor = BatchSpanProcessor(collector_exporter)
 
 # Configure the tracer to use the collector exporter
-tracer_provider = TracerProvider(resource=resource))
+tracer_provider = TracerProvider(resource=resource)
 tracer_provider.add_span_processor(span_processor)
 tracer = TracerProvider().get_tracer(__name__)
 
@@ -140,8 +138,7 @@ class HealthCheck():
       status=health_pb2.HealthCheckResponse.SERVING)
 
 def start(dummy_mode):
-  server = grpc.server(futures.ThreadPoolExecutor(max_workers=10),
-                       interceptors=(tracer_interceptor,))
+  server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), interceptors = [server_interceptor()])
   service = None
   if dummy_mode:
     service = DummyEmailService()
@@ -161,61 +158,9 @@ def start(dummy_mode):
   except KeyboardInterrupt:
     server.stop(0)
 
-def initStackdriverProfiling():
-  project_id = None
-  try:
-    project_id = os.environ["GCP_PROJECT_ID"]
-  except KeyError:
-    # Environment variable not set
-    pass
-
-  for retry in range(1,4):
-    try:
-      if project_id:
-        googlecloudprofiler.start(service='email_server', service_version='1.0.0', verbose=0, project_id=project_id)
-      else:
-        googlecloudprofiler.start(service='email_server', service_version='1.0.0', verbose=0)
-      logger.info("Successfully started Stackdriver Profiler.")
-      return
-    except (BaseException) as exc:
-      logger.info("Unable to start Stackdriver Profiler Python agent. " + str(exc))
-      if (retry < 4):
-        logger.info("Sleeping %d to retry initializing Stackdriver Profiler"%(retry*10))
-        time.sleep (1)
-      else:
-        logger.warning("Could not initialize Stackdriver Profiler after retrying, giving up")
-  return
 
 
 if __name__ == '__main__':
   logger.info('starting the email service in dummy mode.')
 
-  # Profiler
-  try:
-    if "DISABLE_PROFILER" in os.environ:
-      raise KeyError()
-    else:
-      logger.info("Profiler enabled.")
-      initStackdriverProfiling()
-  except KeyError:
-      logger.info("Profiler disabled.")
-
-  # Tracing
-  try:
-    if "DISABLE_TRACING" in os.environ:
-      raise KeyError()
-    else:
-      logger.info("Tracing enabled.")
-      sampler = samplers.AlwaysOnSampler()
-      exporter = stackdriver_exporter.StackdriverExporter(
-        project_id=os.environ.get('GCP_PROJECT_ID'),
-        transport=AsyncTransport)
-      tracer_interceptor = server_interceptor.OpenCensusServerInterceptor(sampler, exporter)
-  except (KeyError, DefaultCredentialsError):
-      logger.info("Tracing disabled.")
-      tracer_interceptor = server_interceptor.OpenCensusServerInterceptor()
-  except Exception as e:
-      logger.warn(f"Exception on Cloud Trace setup: {traceback.format_exc()}, tracing disabled.") 
-      tracer_interceptor = server_interceptor.OpenCensusServerInterceptor()
-  
   start(dummy_mode = True)

@@ -19,11 +19,11 @@ import grpc
 import demo_pb2
 import demo_pb2_grpc
 from opentelemetry import trace
-from opentelemetry.instrumentation.grpc import server_interceptor
-from opentelemetry.instrumentation.grpc.grpcext import intercept_server
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchExportSpanProcessor
-from opentelemetry.sdk.trace.export import Span, SpanExporter, SimpleExportSpanProcessor
+from opentelemetry.instrumentation.grpc import client_interceptor
+from opentelemetry.sdk.trace import TracerProvider,Span
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace.export import  SpanExporter, SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from logger import getJSONLogger
 logger = getJSONLogger('emailservice-client')
@@ -36,22 +36,20 @@ collector_exporter = OTLPSpanExporter(
       insecure=True
     # host_name="machine/container name",
 )
-resource = Resource(attributes={
-    "service.name": "EmailService"
-})
+resource=Resource.create({SERVICE_NAME: "emailservice-client"})
 # Create a BatchExportSpanProcessor and add the exporter to it
 # Create a BatchExportSpanProcessor and add the exporter to it
-span_processor = BatchExportSpanProcessor(collector_exporter)
+span_processor = BatchSpanProcessor(collector_exporter)
 
 # Configure the tracer to use the collector exporter
-tracer_provider = TracerProvider(resource=resource))
+tracer_provider = TracerProvider(resource=resource)
 tracer_provider.add_span_processor(span_processor)
 tracer = TracerProvider().get_tracer(__name__)
 
 
 def send_confirmation_email(email, order):
   channel = grpc.insecure_channel('0.0.0.0:8080')
-  channel = grpc.intercept_channel(channel, tracer_interceptor)
+  channel = grpc.intercept_channel(channel,  client_interceptor())
   stub = demo_pb2_grpc.EmailServiceStub(channel)
   try:
     response = stub.SendOrderConfirmation(demo_pb2.SendOrderConfirmationRequest(
