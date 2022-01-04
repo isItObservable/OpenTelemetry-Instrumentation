@@ -204,7 +204,7 @@ func main() {
 	var handler http.Handler = r
     handler = &logHandler{log: log, next: handler} // add logging
     handler = ensureSessionID(handler)             // add session ID
-    handler = otelhttp.NewHandler(handler, "hipstershop.Frontend/Recv.")
+    handler = otelhttp.NewHandler(handler, "hipstershop.Frontend")
 	log.Infof("starting server on " + addr + ":" + srvPort)
 	log.Fatal(http.ListenAndServe(addr+":"+srvPort, handler))
 }
