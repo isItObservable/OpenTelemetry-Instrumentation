@@ -44,7 +44,6 @@ If you don't have any dynatrace tenant , then let's start a [trial on Dynatrace]
 You will first need a Kubernetes cluster with 2 Nodes.
 You can either deploy on Minikube or K3s or follow the instructions to create GKE cluster:
 ### 1.Create a Google Cloud Platform Project
-1. **[Create a Google Cloud Platform project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project)** or use an existing project. Set the `PROJECT_ID` environment variable and ensure the Google Kubernetes Engine and Cloud Operations APIs are enabled.
 ```
 PROJECT_ID="<your-project-id>"
 gcloud services enable container.googleapis.com --project ${PROJECT_ID}
@@ -145,18 +144,13 @@ shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
 ```
 kubectl get service frontend-external | awk '{print $4}'
 ```
+### 6. Look at the Distributed traces ingested by Dynatrace
 
-
-###. [Optional] **Clean up**:
-
+### 7 [Optional] **Clean up**:
 ```
 gcloud container clusters delete onlineboutique \
     --project=${PROJECT_ID} --zone=${ZONE}
 ```
-
-### 6. Look at the Distributed traces ingested by Dynatrace
-
-
 
 ## Architecture
 
