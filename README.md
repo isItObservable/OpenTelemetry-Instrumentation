@@ -1,21 +1,24 @@
+# Is it Observable
+<p align="center"><img src="/image/logo.png" width="40%" alt="Is It observable Logo" /></p>
+
+## How to instrument your code with OpenTelemetry
+<p align="center"><img src="/image/opentelemetry.png" width="20%" alt="OpenTelemetry Logo" /></p>
+
+This tutorial will be based on the popular Demo platform provided by Google : The Online Boutique
 <p align="center">
 <img src="src/frontend/static/icons/Hipster_HeroLogoCyan.svg" width="300" alt="Online Boutique" />
 </p>
-
-
 
 **Online Boutique** is a cloud-native microservices demo application.
 Online Boutique consists of a 10-tier microservices application. The application is a
 web-based e-commerce app where users can browse items,
 add them to the cart, and purchase them.
-
-**Google uses this application to demonstrate use of technologies like
-Kubernetes/GKE, Istio, Stackdriver, gRPC and OpenCensus**. This application
-works on any Kubernetes cluster, as well as Google
-Kubernetes Engine. It’s **easy to deploy with little to no configuration**.
-
-If you’re using this demo, please **★Star** this repository to show your interest!
-
+The Google HipsterShop is a microservice architecture using several langages :
+* Go 
+* Python
+* Nodejs
+* C#
+* Java
 
 ## Screenshots
 
@@ -23,12 +26,25 @@ If you’re using this demo, please **★Star** this repository to show your int
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | [![Screenshot of store homepage](./docs/img/online-boutique-frontend-1.png)](./docs/img/online-boutique-frontend-1.png) | [![Screenshot of checkout screen](./docs/img/online-boutique-frontend-2.png)](./docs/img/online-boutique-frontend-2.png) |
 
-## Quickstart (GKE)
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/GoogleCloudPlatform/microservices-demo&cloudshell_workspace=.&cloudshell_tutorial=docs/cloudshell-tutorial.md)
+## Prerequisite
+The following tools need to be install on your machine :
+- jq
+- kubectl
+- git
+- gcloud ( if you are using GKE)
+- Helm
 
+This tutorial will generate traces and send them to Dynatrace.
+Therefore you will need a Dynatrace Tenant to be able to follow all the instructions of this tutorial .
+If you don't have any dynatrace tenant , then let's start a [trial on Dynatrace](https://www.dynatrace.com/trial/)
+
+## Deployment Steps
+
+You will first need a Kubernetes cluster with 2 Nodes.
+You can either deploy on Minikube or K3s or follow the instructions to create GKE cluster:
+### 1.Create a Google Cloud Platform Project
 1. **[Create a Google Cloud Platform project](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project)** or use an existing project. Set the `PROJECT_ID` environment variable and ensure the Google Kubernetes Engine and Cloud Operations APIs are enabled.
-
 ```
 PROJECT_ID="<your-project-id>"
 gcloud services enable container.googleapis.com --project ${PROJECT_ID}
@@ -38,49 +54,77 @@ gcloud services enable monitoring.googleapis.com \
     cloudprofiler.googleapis.com \
     --project ${PROJECT_ID}
 ```
-
-2. **Clone this repository.**
-
-```
-git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
-cd microservices-demo
-```
-
-3. **Create a GKE cluster.**
-
-- GKE autopilot mode (see [Autopilot
-overview](https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview)
-to learn more):
-
-```
-REGION=us-central1
-gcloud container clusters create-auto onlineboutique \
-    --project=${PROJECT_ID} --region=${REGION}
-```
-
-- GKE Standard mode:
-
+### 2.Create a GKE cluster
 ```
 ZONE=us-central1-b
 gcloud container clusters create onlineboutique \
-    --project=${PROJECT_ID} --zone=${ZONE} \
-    --machine-type=e2-standard-2 --num-nodes=4
+--project=${PROJECT_ID} --zone=${ZONE} \
+--machine-type=e2-standard-2 --num-nodes=4
 ```
 
-4. **Deploy the sample app to the cluster.**
-
+### 3.Clone the Github Repository
 ```
-kubectl apply -f ./release/kubernetes-manifests.yaml
+git clone https://github.com/isItObservable/OpenTelemetry-Instrumentation
+cd OpenTelemetry-Instrumentation
+```
+### 4. Deploy the Opentelemetry Operator
+
+#### Deploy the cert-manager
+```
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.6.1/cert-manager.yaml
+```
+#### Wait for the service to be ready
+```
+kubectl get svc -n cert-manager
+```
+After a few minutes, you should see:
+```
+NAME                   TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+cert-manager           ClusterIP   10.99.253.6     <none>        9402/TCP   42h
+cert-manager-webhook   ClusterIP   10.99.253.123   <none>        443/TCP    42h
 ```
 
-5. **Wait for the Pods to be ready.**
+#### Deploy the OpenTelemetry Operator
+```
+kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml
+```
+
+### 6. Configure the OpenTelemetry Collector
+
+#### Requirements 
+To be able to ingest the Distributed traces generated by the Online Boutique , it would be requried to modify `openTelemetry-manifest.yaml`  with
+- your Dynatrace Tenant URL ( your dynatrace url would be `https://<TENANTID>.live.dynatrace.com` )
+- A dynatrace API token having the right : `Ingest OpenTelemetry traces`
+To generate your API token you will need to click on `Access Tokens` ( in the left menu)
+Follow the instruction described in [dynatrace's documentation](https://www.dynatrace.com/support/help/shortlink/api-authentication#generate-a-token)
+Make sure that the scope Ingest OpenTelemetry traces and metrics v2 is enabled.
+<p align="center"><img src="/image/acces_token.png" width="60%" alt="dt api scope" /></p>
+
+#### Udpate the openTelemetry manifest file
+```
+export DT_TENANT_URL=<YOUR TENANT URL>
+export DT_API_TOKEN=<YOUR DYNATRACE API TOKEN>
+sed -i "s,TENANTURL_TOREPLACE,$DT_TENANT_URL," kubernetes-manifests/openTelemetry-manifest.yaml
+sed -i "s,DT_API_TOKEN_TO_REPLACE,$DT_API_TOKEN," kubernetes-manifests/openTelemetry-manifest.yaml
+```
+#### Deploy the OpenTelemetry Collector
+```
+kubectl apply -f kubernetes-manifests/openTelemetry-manifest.yaml
+```
+
+### 5. Deploy the sample app to the cluster.
+
+#### Deploy
+```
+kubectl create ns hipster-shop
+kubectl apply -f kubernetes-manifests/k8s-manifest.yaml -n hipster-shop
+```
+#### Wait for the Pods to be ready
 
 ```
 kubectl get pods
 ```
-
 After a few minutes, you should see:
-
 ```
 NAME                                     READY   STATUS    RESTARTS   AGE
 adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
@@ -96,37 +140,22 @@ recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
 redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
 shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
 ```
-
-7. **Access the web frontend in a browser** using the frontend's `EXTERNAL_IP`.
+#### Access the web frontend in a browser** using the frontend's `EXTERNAL_IP`.
 
 ```
 kubectl get service frontend-external | awk '{print $4}'
 ```
 
-*Example output - do not copy*
 
-```
-EXTERNAL-IP
-<your-ip>
-```
-
-**Note**- you may see `<pending>` while GCP provisions the load balancer. If this happens, wait a few minutes and re-run the command.
-
-8. [Optional] **Clean up**:
+###. [Optional] **Clean up**:
 
 ```
 gcloud container clusters delete onlineboutique \
     --project=${PROJECT_ID} --zone=${ZONE}
 ```
 
-## Other Deployment Options
+### 6. Look at the Distributed traces ingested by Dynatrace
 
-- **Workload Identity**: [See these instructions.](docs/workload-identity.md)
-- **Istio**: [See these instructions.](docs/service-mesh.md)
-- **Anthos Service Mesh**: ASM requires Workload Identity to be enabled in your GKE cluster. [See the workload identity instructions](docs/workload-identity.md) to configure and deploy the app. Then, use the [service mesh guide](/docs/service-mesh.md).
-- **non-GKE clusters (Minikube, Kind)**: see the [Development Guide](/docs/development-guide.md)
-- **Memorystore**: [See these instructions](/docs/memorystore.md) to replace the in-cluster `redis` database with hosted Google Cloud Memorystore (redis).
-- **Cymbal Shops Branding**: [See these instructions](/docs/cymbal-shops.md)
 
 
 ## Architecture
@@ -151,47 +180,8 @@ Find **Protocol Buffers Descriptions** at the [`./pb` directory](./pb).
 | [checkoutservice](./src/checkoutservice)             | Go            | Retrieves user cart, prepares order and orchestrates the payment, shipping and the email notification.                            |
 | [recommendationservice](./src/recommendationservice) | Python        | Recommends other products based on what's given in the cart.                                                                      |
 | [adservice](./src/adservice)                         | Java          | Provides text ads based on given context words.                                                                                   |
-| [loadgenerator](./src/loadgenerator)                 | Python/Locust | Continuously sends requests imitating realistic user shopping flows to the frontend.                                              |
+| [loadgenerator](./src/loadgenerator)                 | JS    /K6     | Continuously sends requests imitating realistic user shopping flows to the frontend.                                              |
 
-## Features
 
-- **[Kubernetes](https://kubernetes.io)/[GKE](https://cloud.google.com/kubernetes-engine/):**
-  The app is designed to run on Kubernetes (both locally on "Docker for
-  Desktop", as well as on the cloud with GKE).
-- **[gRPC](https://grpc.io):** Microservices use a high volume of gRPC calls to
-  communicate to each other.
-- **[Istio](https://istio.io):** Application works on Istio service mesh.
-- **[OpenCensus](https://opencensus.io/) Tracing:** Most services are
-  instrumented using OpenCensus trace interceptors for gRPC/HTTP.
-- **[Cloud Operations (Stackdriver)](https://cloud.google.com/products/operations):** Many services
-  are instrumented with **Profiling**, **Tracing** and **Debugging**. In
-  addition to these, using Istio enables features like Request/Response
-  **Metrics** and **Context Graph** out of the box. When it is running out of
-  Google Cloud, this code path remains inactive.
-- **[Skaffold](https://skaffold.dev):** Application
-  is deployed to Kubernetes with a single command using Skaffold.
-- **Synthetic Load Generation:** The application demo comes with a background
-  job that creates realistic usage patterns on the website using
-  [Locust](https://locust.io/) load generator.
 
-## Local Development
 
-If you would like to contribute features or fixes to this app, see the [Development Guide](/docs/development-guide.md) on how to build this demo locally.
-
-## Demos featuring Online Boutique
-
-- [Take the first step toward SRE with Cloud Operations Sandbox](https://cloud.google.com/blog/products/operations/on-the-road-to-sre-with-cloud-operations-sandbox)
-- [Deploying the Online Boutique sample application on Anthos Service Mesh](https://cloud.google.com/service-mesh/docs/onlineboutique-install-kpt)
-- [Anthos Service Mesh Workshop: Lab Guide](https://codelabs.developers.google.com/codelabs/anthos-service-mesh-workshop)
-- [KubeCon EU 2019 - Reinventing Networking: A Deep Dive into Istio's Multicluster Gateways - Steve Dake, Independent](https://youtu.be/-t2BfT59zJA?t=982)
-- Google Cloud Next'18 SF
-  - [Day 1 Keynote](https://youtu.be/vJ9OaAqfxo4?t=2416) showing GKE On-Prem
-  - [Day 3 Keynote](https://youtu.be/JQPOPV_VH5w?t=815) showing Stackdriver
-    APM (Tracing, Code Search, Profiler, Google Cloud Build)
-  - [Introduction to Service Management with Istio](https://www.youtube.com/watch?v=wCJrdKdD6UM&feature=youtu.be&t=586)
-- [Google Cloud Next'18 London – Keynote](https://youtu.be/nIq2pkNcfEI?t=3071)
-  showing Stackdriver Incident Response Management
-
----
-
-This is not an official Google project.
