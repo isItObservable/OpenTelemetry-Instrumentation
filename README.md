@@ -146,6 +146,12 @@ kubectl get service frontend-external | awk '{print $4}'
 ```
 ### 6. Look at the Distributed traces ingested by Dynatrace
 
+Open you browser , Open the online boutique and add few products in the cart.
+Open Dynatrace, Click on the left menu `Application & Microserivces / Distributed traces`
+<p align="center">
+<img src="image/dynatrace.png" width="300" alt="Dynatrace distributed traces" />
+</p>
+
 ### 7 [Optional] **Clean up**:
 ```
 gcloud container clusters delete onlineboutique \
