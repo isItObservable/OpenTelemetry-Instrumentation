@@ -149,7 +149,7 @@ kubectl get service frontend-external | awk '{print $4}'
 Open you browser , Open the online boutique and add few products in the cart.
 Open Dynatrace, Click on the left menu `Application & Microserivces / Distributed traces`
 <p align="center">
-<img src="image/dynatrace.png" width="300" alt="Dynatrace distributed traces" />
+<img src="image/dynatrace.png" width="60%" alt="Dynatrace distributed traces" />
 </p>
 
 ### 7 [Optional] **Clean up**:
