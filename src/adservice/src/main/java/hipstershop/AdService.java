@@ -60,6 +60,7 @@ public final class AdService {
   private HealthStatusManager healthMgr;
 
   private static final AdService service = new AdService();
+
   @WithSpan
   private void start() throws IOException {
     int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "9555"));
@@ -108,6 +109,8 @@ public final class AdService {
       AdService service = AdService.getInstance();
       Span getAdsspan=tracer.spanBuilder("getAds").setSpanKind(SpanKind.SERVER).startSpan();
       try {
+
+
         getAdsspan.setAttribute("method", "getAds");
         List<Ad> allAds = new ArrayList<>();
         logger.info("received ad request (context_words=" + req.getContextKeysList() + ")");
@@ -115,6 +118,7 @@ public final class AdService {
           Attributes eventAttributes = Attributes.of(
                   AttributeKey.stringKey("Context Keys"), req.getContextKeysList().toString(),
                   AttributeKey.stringKey("Context Keys length"), String.valueOf(req.getContextKeysCount()));
+
           getAdsspan.addEvent( "Constructing Ads using context",eventAttributes);
 
           for (int i = 0; i < req.getContextKeysCount(); i++) {
@@ -133,6 +137,7 @@ public final class AdService {
         AdResponse reply = AdResponse.newBuilder().addAllAds(allAds).build();
         responseObserver.onNext(reply);
         responseObserver.onCompleted();
+
         getAdsspan.end();
       } catch (StatusRuntimeException e) {
         logger.log(Level.WARN, "GetAds Failed with status {}", e.getStatus());

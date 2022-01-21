@@ -66,6 +66,124 @@ gcloud container clusters create onlineboutique \
 git clone https://github.com/isItObservable/OpenTelemetry-Instrumentation
 cd OpenTelemetry-Instrumentation
 ```
+#### 4.Deploy Nginx Ingress Controller
+```
+kubectl create clusterrolebinding cluster-admin-binding \
+  --clusterrole cluster-admin \
+  --user $(gcloud config get-value account)
+kubectl apply -f nginx/deploy.yaml
+```
+this command will install the nginx controller on the nodes having the label `observability`
+
+##### 5. get the ip adress of the ingress gateway
+Since we are using Ingress controller to route the traffic , we will need to get the public ip adress of our ingress.
+With the public ip , we would be able to update the deployment of the ingress for :
+* hipstershop
+* grafana
+* K6
+```
+IP=$(kubectl get svc nginx-ingress-nginx-controller -n ingress-nginx -ojson | jq -j '.status.loadBalancer.ingress[].ip')
+```
+#### 4.Prometheus
+Our Chaos experiments will utilize the Prometheus as an Observabilty backend
+We will neeed to deploy Prometheus only on the nodes having the label `observability`.
+```
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install prometheus prometheus-community/kube-prometheus-stack --set server.nodeSelector.node-type=observability --set prometheusOperator.nodeSelector.selector.node-type=observability  --set prometheus.nodeSelector.selector.node-type=observability --set grafana.nodeSelector.selector.node-type=observability  
+```
+### 5. Configure Prometheus by enabling the feature remo-writer
+
+To measure the impact of our experiments on use traffic , we will use the load testing tool named K6.
+K6 has a Prometheus integration that writes metrics to the Prometheus Server.
+This integration requires to enable a feature in Prometheus named: remote-writer
+
+To enable this feature we will need to edit the CRD containing all the settings of promethes: prometehus
+
+To get the Prometheus object named use by prometheus we need to run the following command:
+```
+kubectl get Prometheus
+```
+here is the expected output:
+```
+NAME                                    VERSION   REPLICAS   AGE
+prometheus-kube-prometheus-prometheus   v2.32.1   1          22h
+```
+We will need to add an extra property in the configuration object :
+```
+enableFeatures:
+- remote-write-receiver
+```
+so to update the object :
+```
+kubectl edit Prometheus prometheus-kube-prometheus-prometheus
+```
+After the update your Prometheus object should look  like :
+```
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  annotations:
+    meta.helm.sh/release-name: prometheus
+    meta.helm.sh/release-namespace: default
+  generation: 2
+  labels:
+    app: kube-prometheus-stack-prometheus
+    app.kubernetes.io/instance: prometheus
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    app.kubernetes.io/version: 30.0.1
+    chart: kube-prometheus-stack-30.0.1
+    heritage: Helm
+    release: prometheus
+  name: prometheus-kube-prometheus-prometheus
+  namespace: default
+spec:
+  alerting:
+  alertmanagers:
+  - apiVersion: v2
+    name: prometheus-kube-prometheus-alertmanager
+    namespace: default
+    pathPrefix: /
+    port: http-web
+  enableAdminAPI: false
+  enableFeatures:
+  - remote-write-receiver
+  externalUrl: http://prometheus-kube-prometheus-prometheus.default:9090
+  image: quay.io/prometheus/prometheus:v2.32.1
+  listenLocal: false
+  logFormat: logfmt
+  logLevel: info
+  paused: false
+  podMonitorNamespaceSelector: {}
+  podMonitorSelector:
+  matchLabels:
+  release: prometheus
+  portName: http-web
+  probeNamespaceSelector: {}
+  probeSelector:
+  matchLabels:
+  release: prometheus
+  replicas: 1
+  retention: 10d
+  routePrefix: /
+  ruleNamespaceSelector: {}
+  ruleSelector:
+  matchLabels:
+  release: prometheus
+  securityContext:
+  fsGroup: 2000
+  runAsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  serviceAccountName: prometheus-kube-prometheus-prometheus
+  serviceMonitorNamespaceSelector: {}
+  serviceMonitorSelector:
+  matchLabels:
+  release: prometheus
+  shards: 1
+  version: v2.32.1
+```
 ### 4. Deploy the Opentelemetry Operator
 
 #### Deploy the cert-manager

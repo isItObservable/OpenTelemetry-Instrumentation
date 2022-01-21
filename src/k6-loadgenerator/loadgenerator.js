@@ -1,11 +1,12 @@
-import http from 'k6/http';
+//import http from 'k6/http';
+import tracing, { Http } from 'k6/x/tracing';
 import { sleep,check} from 'k6';
 import { Counter } from "k6/metrics";
 
 /**
  * Hipster workload generator by k6
- * @param __ENV.FRONTEND_ADDR
- * @constructor yuxiaoba
+ * @param __ENV.FRONTEND_ADDR, __ENV.OTLP_SERVICE_ADDR, __ENV.OTLP_SERVICE_PORT
+ * @constructor hrexed
  */
 
 let errors = new Counter("errors");
@@ -15,6 +16,9 @@ export let options = {
 };
 
 const baseurl = `http://${__ENV.FRONTEND_ADDR}`;
+
+const otlpurl = `http://${__ENV.FRONTEND_ADDR}:${__ENV.OTLP_SERVICE_PORT}`;
+
 
 const tasks = {
     "index": 1,
@@ -38,7 +42,17 @@ const products = [
 
 const waittime = [1,2,3,4,5,6,7,8,9,10]
 
+export function setup() {
+  console.log(`Running xk6-distributed-tracing v${tracing.version}`);
+}
 export default function() {
+
+    const http = new Http({
+        exporter: "otlp",
+        propagator: "w3c",
+        endpoint: otlpurl
+      });
+
     //Access index page
     for ( let i=0; i<tasks["index"]; i++)
     {
@@ -148,4 +162,8 @@ export default function() {
         sleep(waittime[Math.floor(Math.random() * waittime.length)])
     }
 
+}
+export function teardown(){
+  // Cleanly shutdown and flush telemetry when k6 exits.
+  tracing.shutdown();
 }
