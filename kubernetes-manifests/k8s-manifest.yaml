@@ -317,7 +317,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host :  "onlineboutique.34.141.7.13.nip.io"
+    - host :  "onlineboutique.IP_TO_REPLACE.nip.io"
       http:
         paths:
           - pathType: ImplementationSpecific
@@ -553,13 +553,11 @@ spec:
           args: ["-u", "30", "-d", "24h"]
           env:
             - name: FRONTEND_ADDR
-              value: "onlineboutique.34.141.7.13.nip.io"
+              value: "onlineboutique.IP_TO_REPLACE.nip.io"
             - name: K6_PROMETHEUS_REMOTE_URL
               value: http://prometheus-kube-prometheus-prometheus.default.svc.cluster.local:9090/api/v1/write
             - name: OTLP_SERVICE_ADDR
-              value: "otel-collector.default.svc.cluster.local"
-            - name: OTLP_SERVICE_PORT
-              value: "4317"
+              value: "otel-collector.default.svc.cluster.local:4317"
           resources:
             requests:
               cpu: 300m

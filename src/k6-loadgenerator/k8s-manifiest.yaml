@@ -29,9 +29,7 @@ spec:
               - name: K6_PROMETHEUS_REMOTE_URL
                 value: http://prometheus-kube-prometheus-prometheus.default.svc.cluster.local:9090/api/v1/write
               - name: OTLP_SERVICE_ADDR
-                value: "otel-collector.default.svc.cluster.local"
-              - name: OTLP_SERVICE_PORT
-                value: "4317"
+                value: "otel-collector.default.svc.cluster.local:4317"
           resources:
             requests:
               cpu: 300m

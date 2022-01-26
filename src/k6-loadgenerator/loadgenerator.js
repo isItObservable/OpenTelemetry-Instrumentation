@@ -17,7 +17,7 @@ export let options = {
 
 const baseurl = `http://${__ENV.FRONTEND_ADDR}`;
 
-const otlpurl = `http://${__ENV.FRONTEND_ADDR}:${__ENV.OTLP_SERVICE_PORT}`;
+
 
 
 const tasks = {
@@ -42,6 +42,9 @@ const products = [
 
 const waittime = [1,2,3,4,5,6,7,8,9,10]
 
+const url=`${__ENV.OTLP_SERVICE_ADDR}`;
+
+
 export function setup() {
   console.log(`Running xk6-distributed-tracing v${tracing.version}`);
 }
@@ -50,7 +53,7 @@ export default function() {
     const http = new Http({
         exporter: "otlp",
         propagator: "w3c",
-        endpoint: otlpurl
+        endpoint: url
       });
 
     //Access index page

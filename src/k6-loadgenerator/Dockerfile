@@ -4,8 +4,8 @@ ADD . .
 RUN apk --no-cache add git
 # RUN CGO_ENABLED=0 go install -a -trimpath -ldflags "-s -w -X go.k6.io/k6/lib/consts.VersionDetails=$(date -u +"%FT%T%z")/$(git describe --always --long --dirty)"
 RUN go install -trimpath go.k6.io/xk6/cmd/xk6@latest
-RUN xk6 build --with github.com/k6io/xk6-distributed-tracing@latest
-RUN xk6 build --with github.com/grafana/xk6-output-prometheus-remote@latest
+RUN xk6 build v0.35.0 --with github.com/k6io/xk6-distributed-tracing@latest --with github.com/grafana/xk6-output-prometheus-remote@latest
+
 RUN cp k6 $GOPATH/bin/k6
 
 # COPY ./tests ./tests

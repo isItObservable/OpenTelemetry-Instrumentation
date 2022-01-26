@@ -84,6 +84,12 @@ With the public ip , we would be able to update the deployment of the ingress fo
 ```
 IP=$(kubectl get svc nginx-ingress-nginx-controller -n ingress-nginx -ojson | jq -j '.status.loadBalancer.ingress[].ip')
 ```
+
+update the following files to update the ingress definitions :
+```
+sed -i "s,IP_TO_REPLACE,$IP," kubernetes-manifests/k8s-manifest.yaml
+```
+
 #### 4.Prometheus
 Our Chaos experiments will utilize the Prometheus as an Observabilty backend
 We will neeed to deploy Prometheus only on the nodes having the label `observability`.
@@ -259,9 +265,8 @@ shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
 ```
 #### Access the web frontend in a browser** using the frontend's `EXTERNAL_IP`.
 
-```
-kubectl get service frontend-external | awk '{print $4}'
-```
+with http://onlineboutique.<YOUR INGRESS IP>.nip.io
+
 ### 6. Look at the Distributed traces ingested by Dynatrace
 
 Open you browser , Open the online boutique and add few products in the cart.
