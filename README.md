@@ -250,18 +250,19 @@ kubectl get pods
 After a few minutes, you should see:
 ```
 NAME                                     READY   STATUS    RESTARTS   AGE
-adservice-76bdd69666-ckc5j               1/1     Running   0          2m58s
-cartservice-66d497c6b7-dp5jr             1/1     Running   0          2m59s
-checkoutservice-666c784bd6-4jd22         1/1     Running   0          3m1s
-currencyservice-5d5d496984-4jmd7         1/1     Running   0          2m59s
-emailservice-667457d9d6-75jcq            1/1     Running   0          3m2s
-frontend-6b8d69b9fb-wjqdg                1/1     Running   0          3m1s
-loadgenerator-665b5cd444-gwqdq           1/1     Running   0          3m
-paymentservice-68596d6dd6-bf6bv          1/1     Running   0          3m
-productcatalogservice-557d474574-888kr   1/1     Running   0          3m
-recommendationservice-69c56b74d4-7z8r5   1/1     Running   0          3m1s
-redis-cart-5f59546cdd-5jnqf              1/1     Running   0          2m58s
-shippingservice-6ccc89f8fd-v686r         1/1     Running   0          2m58s
+adservice-668484d797-jxqsg               1/1     Running   0          23d
+cartservice-754d9f69b6-k5tlk             1/1     Running   0          23d
+checkoutservice-56b96d95c-7k66b          1/1     Running   0          23d
+currencyservice-c4bd899cd-zvwnx          1/1     Running   0          23d
+emailservice-79bdf579f6-wvx4c            1/1     Running   0          22d
+frontend-5694965584-gfkrk                1/1     Running   0          22d
+k6loadgenerator-69d9579f98-w5g66         1/1     Running   1          24h
+loadgenerator-546597c764-qs8ts           1/1     Running   22         22d
+paymentservice-6fc857fd48-zfmfr          1/1     Running   0          22d
+productcatalogservice-6b488c9d57-lwflb   1/1     Running   0          22d
+recommendationservice-78fbf687c7-m68v9   1/1     Running   0          22d
+redis-cart-79b499b7dd-wrlgf              1/1     Running   0          23d
+shippingservice-7986c676f5-krnhv         1/1     Running   0          23d
 ```
 #### Access the web frontend in a browser** using the frontend's `EXTERNAL_IP`.
 
