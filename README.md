@@ -95,7 +95,7 @@ We will neeed to deploy Prometheus only on the nodes having the label `observabi
 ```
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-helm install prometheus prometheus-community/kube-prometheus-stack --set server.nodeSelector.node-type=observability --set prometheusOperator.nodeSelector.selector.node-type=observability  --set prometheus.nodeSelector.selector.node-type=observability --set grafana.nodeSelector.selector.node-type=observability  
+helm install prometheus prometheus-community/kube-prometheus-stack 
 ```
 ### 5. Configure Prometheus by enabling the feature remo-writer
 
