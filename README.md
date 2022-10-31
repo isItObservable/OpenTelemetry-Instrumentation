@@ -68,10 +68,9 @@ cd OpenTelemetry-Instrumentation
 ```
 #### 4.Deploy Nginx Ingress Controller
 ```
-kubectl create clusterrolebinding cluster-admin-binding \
-  --clusterrole cluster-admin \
-  --user $(gcloud config get-value account)
-kubectl apply -f nginx/deploy.yaml
+helm upgrade --install ingress-nginx ingress-nginx \
+  --repo https://kubernetes.github.io/ingress-nginx \
+  --namespace ingress-nginx --create-namespace
 ```
 this command will install the nginx controller on the nodes having the label `observability`
 
@@ -82,7 +81,7 @@ With the public ip , we would be able to update the deployment of the ingress fo
 * grafana
 * K6
 ```
-IP=$(kubectl get svc nginx-ingress-nginx-controller -n ingress-nginx -ojson | jq -j '.status.loadBalancer.ingress[].ip')
+IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -ojson | jq -j '.status.loadBalancer.ingress[].ip')
 ```
 
 update the following files to update the ingress definitions :
